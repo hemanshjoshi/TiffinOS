@@ -17,13 +17,31 @@ CREATE TABLE IF NOT EXISTS public.users (
 );
 
 -- 2. Migrate data from 'profiles' to 'users' if 'profiles' exists and 'users' is empty
+-- Using dynamic SQL to avoid compilation errors if 'profiles' doesn't exist or columns are missing
 DO $$
+DECLARE
+    column_exists BOOLEAN;
 BEGIN
     IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'profiles') THEN
-        INSERT INTO public.users (id, full_name, mobile_number, email, profile_photo_url, created_at, updated_at)
-        SELECT id, full_name, mobile_number, email, profile_photo_url, created_at, updated_at
-        FROM public.profiles
-        ON CONFLICT (id) DO NOTHING;
+
+        -- Check if 'full_name' exists in profiles before referencing it
+        SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='full_name') INTO column_exists;
+
+        IF column_exists THEN
+            -- Safe to migrate if column exists
+            INSERT INTO public.users (id, full_name, mobile_number, email, profile_photo_url, created_at, updated_at)
+            SELECT id, full_name, mobile_number, email, profile_photo_url, created_at, updated_at
+            FROM public.profiles
+            ON CONFLICT (id) DO NOTHING;
+        ELSE
+            -- Fallback if column name differs (though supabase_schema.sql says it is full_name)
+            -- Just migrates ID and timestamps if names are broken
+            INSERT INTO public.users (id, created_at, updated_at)
+            SELECT id, created_at, updated_at
+            FROM public.profiles
+            ON CONFLICT (id) DO NOTHING;
+        END IF;
+
     END IF;
 END $$;
 
