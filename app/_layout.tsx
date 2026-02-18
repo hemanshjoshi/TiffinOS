@@ -98,6 +98,17 @@ function RootLayoutContent() {
     const currentSubSegment = currentSegments.length > 1 ? currentSegments[1] : '';
     const isOnboarding = inAuthGroup && onboardingScreens.includes(currentSubSegment);
 
+    // SECURITY: Block Partner/Admin routes for Customer App
+    const forbiddenSegments = ['partner', 'admin'];
+    const isForbidden = currentSegments.some(seg => forbiddenSegments.includes(seg));
+
+    if (isForbidden) {
+       // Redirect to home if trying to access forbidden routes
+       // We can allow this if we implement strict role checking, but user requested isolation.
+       router.replace('/(tabs)/home');
+       return;
+    }
+
     if (!session) {
       if (!inAuthGroup || isOnboarding) {
         router.replace('/(auth)/welcome');

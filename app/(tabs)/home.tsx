@@ -13,6 +13,7 @@ import { useAuth } from '@/services/authContext';
 import { useProfileStore } from '@/store/profileStore';
 import { AddressService } from '@/services/address';
 import SideMenu from '@/components/SideMenu';
+import { FOOD_CATEGORIES } from '@/constants/Categories';
 
 const { width, height } = Dimensions.get('window');
 
@@ -33,14 +34,7 @@ export default function HomeScreen() {
   const [currentLocationName, setCurrentLocationName] = useState<string | null>(null);
   const setCurrentLocation = useAddressStore((state) => state.setCurrentLocation);
 
-  // Hardcoded Categories as per screenshot
-  const categories = [
-    { id: '1', name: 'Snacks', icon: 'https://cdn-icons-png.flaticon.com/512/2515/2515183.png' },
-    { id: '2', name: 'Meal', icon: 'https://cdn-icons-png.flaticon.com/512/706/706195.png' },
-    { id: '3', name: 'Vegan', icon: 'https://cdn-icons-png.flaticon.com/512/5346/5346176.png' },
-    { id: '4', name: 'Dessert', icon: 'https://cdn-icons-png.flaticon.com/512/2454/2454219.png' },
-    { id: '5', name: 'Drinks', icon: 'https://cdn-icons-png.flaticon.com/512/2405/2405597.png' },
-  ];
+  const categories = FOOD_CATEGORIES;
 
   // Initialize Address & Fetch Data
   useEffect(() => {

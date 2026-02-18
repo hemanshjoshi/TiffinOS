@@ -127,15 +127,6 @@ export default function AddAddressScreen() {
           </TouchableOpacity>
         </ScrollView>
       </View>
-
-      {/* Bottom Tab Bar Placeholder */}
-      <View style={styles.bottomTab}>
-        <TouchableOpacity><Image source={require('@/assets/icon.png')} style={styles.tabIcon} /></TouchableOpacity>
-        <TouchableOpacity><Image source={require('@/assets/icon.png')} style={styles.tabIcon} /></TouchableOpacity>
-        <TouchableOpacity><Image source={require('@/assets/icon.png')} style={styles.tabIcon} /></TouchableOpacity>
-        <TouchableOpacity><Image source={require('@/assets/icon.png')} style={styles.tabIcon} /></TouchableOpacity>
-        <TouchableOpacity><Image source={require('@/assets/icon.png')} style={styles.tabIcon} /></TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -225,23 +216,4 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
-  bottomTab: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    height: 70,
-    backgroundColor: '#EE5D28',
-    borderRadius: 35,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-  tabIcon: {
-    width: 24,
-    height: 24,
-    tintColor: '#fff',
-    opacity: 0.8,
-  }
 });

@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { Screen } from '@/components/ui/Screen';
 import { Colors } from '@/constants/Colors';
 import { router } from 'expo-router';
-import { ChevronRight, Heart, MapPin, CreditCard, Settings, LogOut, ShieldCheck, User } from 'lucide-react-native';
+import { ChevronRight, Heart, MapPin, CreditCard, Settings, LogOut, ShieldCheck, User, Headset } from 'lucide-react-native';
 import { useProfileStore } from '@/store/profileStore';
 import { useAuth } from '@/services/authContext';
 
@@ -15,6 +15,7 @@ export default function ProfileScreen() {
     { icon: <MapPin size={22} color={Colors.text} />, label: 'Delivery Addresses', route: '/address' },
     { icon: <CreditCard size={22} color={Colors.text} />, label: 'Payment Methods', route: '/profile/payment' },
     { icon: <Heart size={22} color={Colors.text} />, label: 'Favorites', route: '/(tabs)/favorites' },
+    { icon: <Headset size={22} color={Colors.text} />, label: 'Help & Support', route: '/support' },
     { icon: <Settings size={22} color={Colors.text} />, label: 'Settings', route: '/settings' },
   ];
 
@@ -47,18 +48,6 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
             ))}
             
-            {/* Admin Link */}
-            <TouchableOpacity 
-                style={styles.menuItem}
-                onPress={() => router.push('/admin/dashboard')}
-            >
-                <View style={[styles.menuIconContainer, { backgroundColor: '#E3F2FD' }]}>
-                    <ShieldCheck size={22} color={Colors.primary} />
-                </View>
-                <Text style={[styles.menuLabel, {color: Colors.primary}]}>Admin Dashboard</Text>
-                <ChevronRight color={Colors.primary} size={20} />
-            </TouchableOpacity>
-
              <TouchableOpacity 
                 style={[styles.menuItem, styles.logoutItem]}
                 onPress={() => router.push('/(modals)/logout')}

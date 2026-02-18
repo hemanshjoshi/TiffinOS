@@ -25,11 +25,11 @@ export default function PartnerDashboard() {
 
   const fetchKitchenStatus = async (uid: string) => {
     try {
-      // Check profiles first as kitchens might be linked there
+      // Correctly fetch from kitchens table using owner_id
       const { data, error } = await supabase
-        .from('profiles')
+        .from('kitchens')
         .select('*')
-        .eq('id', uid)
+        .eq('owner_id', uid)
         .single();
       
       if (error) throw error;
@@ -37,22 +37,22 @@ export default function PartnerDashboard() {
       setKitchen(data);
       setIsOnline(data.is_active);
     } catch (e) {
-      console.error(e);
+      console.error("Error fetching kitchen status:", e);
     } finally {
       setLoading(false);
     }
   };
 
   const toggleOnline = async (value: boolean) => {
-    if (!userId) return;
+    if (!userId || !kitchen?.id) return;
     
     // Optimistic update
     setIsOnline(value);
     
     const { error } = await supabase
-        .from('profiles')
-        .update({ is_open: value })
-        .eq('id', userId);
+        .from('kitchens')
+        .update({ is_active: value })
+        .eq('id', kitchen.id); // Update using Kitchen ID
         
     if (error) {
         console.error('Error updating status:', error);

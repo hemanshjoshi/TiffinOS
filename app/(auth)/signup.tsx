@@ -50,13 +50,15 @@ export default function SignupScreen() {
       // 2. Insert into our custom users/profiles table
       try {
         const { error: profileError } = await supabase
-          .from('profiles') // Assuming profiles table based on home.tsx usage
+          .from('users') // Standardized to users table
           .upsert({
             id: user.id,
             full_name: name,
             mobile_number: phone,
             email: email,
-            // dob: dob, // If column exists
+            date_of_birth: dob,
+            user_type: 'CUSTOMER',
+            account_status: 'ACTIVE',
             updated_at: new Date().toISOString(),
           });
 

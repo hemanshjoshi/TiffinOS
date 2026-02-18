@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, Image } from 'react-native';
 import { Screen } from '@/components/ui/Screen';
 import { Button } from '@/components/ui/Button';
 import { Colors } from '@/constants/Colors';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { CheckCircle } from 'lucide-react-native';
 
 export default function OrderSuccessScreen() {
+  const { orderId } = useLocalSearchParams();
+
   return (
     <Screen backgroundColor={Colors.background} safeArea={true}>
       <View style={styles.container}>
@@ -14,14 +16,14 @@ export default function OrderSuccessScreen() {
            <CheckCircle size={80} color={Colors.success} style={styles.icon} />
            <Text style={styles.title}>Order Placed!</Text>
            <Text style={styles.subtitle}>
-             Your order has been placed successfully. You can track the delivery in the 'Orders' section.
+             Your order #{String(orderId || '').slice(0, 8).toUpperCase()} has been placed successfully. You can track the delivery in the 'Orders' section.
            </Text>
         </View>
 
         <View style={styles.footer}>
            <Button 
              title="Track Order" 
-             onPress={() => router.replace('/order/tracking/123')}
+             onPress={() => router.replace(`/order/tracking/${orderId || '123'}` as any)}
              size="lg"
              style={styles.button}
            />
