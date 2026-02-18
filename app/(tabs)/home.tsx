@@ -13,6 +13,7 @@ import { useAuth } from '@/services/authContext';
 import { useProfileStore } from '@/store/profileStore';
 import { AddressService } from '@/services/address';
 import SideMenu from '@/components/SideMenu';
+import { useCachedData } from '@/hooks/useCachedData';
 
 const { width, height } = Dimensions.get('window');
 
@@ -92,14 +93,25 @@ export default function HomeScreen() {
       } else {
         // Fallback to OpenStreetMap Nominatim for Web (or if native fails)
         try {
-           const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+           const response = await fetch(
+             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+             {
+               headers: {
+                 'User-Agent': 'MaakhanaApp/1.0',
+                 'Accept-Language': 'en'
+               }
+             }
+           );
            const data = await response.json();
            if (data && data.address) {
-              // Construct a readable address from OSM data
+              // Construct a readable address from OSM data with more fallbacks
               const house = data.address.house_number ? `${data.address.house_number}, ` : '';
-              const street = data.address.road || data.address.pedestrian || data.address.suburb || '';
-              const city = data.address.city || data.address.town || data.address.village || '';
-              const name = `${house}${street}, ${city}`.replace(/^, /, '');
+              const street = data.address.road || data.address.pedestrian || data.address.suburb || data.address.neighbourhood || data.address.residential || '';
+              const city = data.address.city || data.address.town || data.address.village || data.address.state_district || data.address.state || '';
+              
+              let name = `${house}${street}, ${city}`;
+              name = name.replace(/^, /, '').replace(/, $/, '').trim();
+              
               setCurrentLocationName(name || 'Current Location');
            } else {
               setCurrentLocationName('Current Location');
@@ -253,7 +265,9 @@ export default function HomeScreen() {
 
          {/* Greeting */}
          <View style={styles.greetingSection}>
-            <Text style={styles.greetingTitle}>Hi {profile?.full_name?.split(' ')[0] || 'there'},</Text>
+            <Text style={styles.greetingTitle}>
+              Hi {profile?.full_name?.split(' ')[0] || (profile?.email?.split('@')[0]?.replace(/[0-9]/g, '') || 'there')},
+            </Text>
             <Text style={styles.greetingSubtitle}>Rise And Shine! It's Breakfast Time</Text>
          </View>
 

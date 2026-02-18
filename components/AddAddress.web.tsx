@@ -69,7 +69,45 @@ export default function AddAddressScreen() {
       let location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
       
-      // Reverse Geocoding
+      // Reverse Geocoding - Prefer OSM for Web to match Home Screen consistency
+      try {
+         const response = await fetch(
+             `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+             {
+               headers: {
+                 'User-Agent': 'MaakhanaApp/1.0',
+                 'Accept-Language': 'en'
+               }
+             }
+         );
+         const data = await response.json();
+         if (data && data.address) {
+             const house = data.address.house_number ? `${data.address.house_number}, ` : '';
+             const street = data.address.road || data.address.pedestrian || data.address.suburb || data.address.neighbourhood || '';
+             const city = data.address.city || data.address.town || data.address.village || '';
+             const state = data.address.state || '';
+             const pincode = data.address.postcode || '';
+             
+             let streetArea = `${house}${street}`;
+             if (!streetArea) streetArea = data.display_name.split(',')[0]; // Fallback to first part of display name
+
+             setFormData(prev => ({
+                 ...prev,
+                 latitude,
+                 longitude,
+                 street_area: streetArea,
+                 city: city,
+                 state: state,
+                 pincode: pincode,
+                 building_society: data.address.suburb || data.address.residential || ''
+             }));
+             return; // Success with OSM
+         }
+      } catch (osmErr) {
+         console.warn("OSM Geocoding failed, falling back to Expo Location", osmErr);
+      }
+
+      // Fallback to Expo Location (Google Maps if configured)
       let [addr] = await Location.reverseGeocodeAsync({ latitude, longitude });
       
       if (addr) {
@@ -78,7 +116,7 @@ export default function AddAddressScreen() {
           ...prev,
           latitude,
           longitude,
-          street_area: addr.street || addr.name || addr.district || prev.street_area, // Prioritize street
+          street_area: addr.street || addr.name || addr.district || prev.street_area, 
           city: addr.city || addr.subregion || prev.city,
           state: addr.region || prev.state,
           pincode: addr.postalCode || prev.pincode,
@@ -96,16 +134,24 @@ export default function AddAddressScreen() {
         return;
     }
 
+    // Ensure user_id is set (in case it wasn't ready at mount)
+    const dataToSave = { ...formData, user_id: formData.user_id || authUser?.id };
+    
+    if (!dataToSave.user_id) {
+        Alert.alert('Error', 'User not authenticated. Please log in again.');
+        return;
+    }
+
     setLoading(true);
     try {
         let savedAddress;
         if (isEdit) {
-            savedAddress = await AddressService.updateAddress(id as string, formData);
+            savedAddress = await AddressService.updateAddress(id as string, dataToSave);
             if (selectedAddress?.id === id) {
                 setSelectedAddress(savedAddress);
             }
         } else {
-            savedAddress = await AddressService.addAddress(formData as Omit<Address, 'id'>);
+            savedAddress = await AddressService.addAddress(dataToSave as Omit<Address, 'id'>);
             setSelectedAddress(savedAddress);
         }
         router.back();

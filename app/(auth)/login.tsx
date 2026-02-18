@@ -29,9 +29,22 @@ export default function LoginScreen() {
     }
   }, [identifier]);
 
+  const showAlert = (title: string, message: string, buttons?: any[]) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+      if (buttons && buttons.length > 0) {
+          const lastBtn = buttons[buttons.length - 1];
+          if (lastBtn.onPress) lastBtn.onPress();
+      }
+    } else {
+      Alert.alert(title, message, buttons);
+    }
+  };
+
   const handleLogin = async () => {
+    console.log('Login started');
     if (!identifier) {
-      Alert.alert('Error', 'Please enter email or mobile number');
+      showAlert('Error', 'Please enter email or mobile number');
       return;
     }
 
@@ -48,6 +61,7 @@ export default function LoginScreen() {
             phoneToSend = '91' + cleanPhone;
         }
         
+        console.log('Sending OTP to:', phoneToSend);
         const { error } = await supabase.auth.signInWithOtp({
           phone: '+' + phoneToSend,
         });
@@ -63,25 +77,34 @@ export default function LoginScreen() {
       } else {
         // Email Password Login Flow
         if (!password) {
-            Alert.alert('Error', 'Please enter password');
+            showAlert('Error', 'Please enter password');
             setLoading(false);
             return;
         }
 
+        console.log('Signing in with password...');
         const { data, error } = await supabase.auth.signInWithPassword({
           email: identifier,
           password,
         });
 
-        if (error) throw error;
+        if (error) {
+            console.error('SignIn error:', error);
+            throw error;
+        }
+
+        console.log('SignIn success, session:', !!data.session);
 
         if (data.session) {
           router.replace('/(tabs)/home');
+        } else {
+          // If session is missing but no error (e.g. maybe email not verified case handled differently?)
+          showAlert('Login Failed', 'Please verify your email address or check your credentials.');
         }
       }
     } catch (err: any) {
-      console.error('Login error:', err);
-      Alert.alert('Error', err.message || 'Login failed');
+      console.error('Login exception:', err);
+      showAlert('Error', err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -89,7 +112,7 @@ export default function LoginScreen() {
 
   const handleSocialLogin = async (provider: 'google' | 'facebook') => {
     // Implementation for social login
-    Alert.alert('Social Login', `${provider} login not implemented yet`);
+    showAlert('Social Login', `${provider} login not implemented yet`);
   };
 
   return (

@@ -152,9 +152,9 @@ export default function SetupProfileScreen() {
             profileUpdates.email = inputValue;
         }
 
-        // Use upsert to handle cases where profile doesn't exist yet
+        // Use upsert to handle cases where user doesn't exist yet
         const { error } = await supabase
-          .from('profiles')
+          .from('users')
           .upsert(profileUpdates);
         
         if (error) throw error;

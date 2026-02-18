@@ -120,54 +120,41 @@ export default function CartScreen() {
     }
 
     setIsProcessingPayment(true);
-    // Simulate payment processing
+    
+    // Simulate payment processing delay
     setTimeout(async () => {
       try {
-        const orderData = {
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-          kitchen_id: kitchenId,
-          status: 'Pending', // Better initial status
-          total_amount: grandTotal,
-          item_total: itemTotal,
-          delivery_fee: finalDeliveryFee,
-          platform_fee: platformFee,
-          taxes: gst,
-          tip_amount: tipAmount,
-          discount_amount: discountAmount,
-          delivery_address_snapshot: selectedAddress, // Use real address
-          delivery_lat: selectedAddress.latitude,
-          delivery_lng: selectedAddress.longitude
+        // Construct payload for RPC
+        const payload = {
+          p_kitchen_id: kitchenId,
+          p_delivery_address_id: selectedAddress?.id,
+          p_items: items.map(item => ({
+            menu_item_id: item.menuItemId,
+            quantity: item.quantity,
+            variant_id: item.selectedVariant?.id || null, 
+            addon_ids: item.selectedAddons?.map(addon => addon.id) || []
+          })),
+          p_coupon_code: appliedCoupon?.code || null
         };
 
-        const { data: order, error: orderError } = await supabase
-          .from('orders')
-          .insert(orderData)
-          .select()
-          .single();
+        console.log('Calling create_order RPC from Cart with payload:', JSON.stringify(payload, null, 2));
 
-        if (orderError) throw orderError;
+        // Call Secure RPC Function
+        const { data: orderResponse, error } = await supabase.rpc('create_order', payload);
 
-        const orderItems = items.map(item => ({
-          order_id: order.id,
-          menu_item_id: item.menuItemId,
-          quantity: item.quantity,
-          price_at_time: item.price,
-          selected_variant: item.selectedVariant,
-          selected_addons: item.selectedAddons,
-        }));
+        if (error) {
+          console.error('RPC Error:', error);
+          throw error;
+        }
 
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItems);
-
-        if (itemsError) throw itemsError;
+        console.log('Order created successfully:', orderResponse);
 
         setIsProcessingPayment(false);
-        router.replace('/order/success');
+        router.replace({ pathname: '/order/success', params: { orderId: orderResponse.order_id } });
         setTimeout(() => clearCart(), 500);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Payment/Order creation error:', error);
-        alert('Failed to place order. Please try again.');
+        alert('Failed to place order: ' + (error.message || 'Unknown error'));
         setIsProcessingPayment(false);
       }
     }, 2000);

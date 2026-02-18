@@ -23,27 +23,18 @@ export default function OrderDetails() {
         .eq('id', id)
         .single();
 
-      if (error || !data?.kitchens) {
-        // Fallback: Check profiles table for kitchen info
-        const { data: orderOnly } = await supabase
-          .from('orders')
-          .select('*, order_items(*, menu_items(*))')
-          .eq('id', id)
-          .single();
-        
-        if (orderOnly) {
-          const { data: profileKitchen } = await supabase
-            .from('profiles')
+      if (data && !data.kitchens && data.kitchen_id) {
+        // Fallback: Check users table for kitchen info if join failed or returned null
+        const { data: kitchenData } = await supabase
+            .from('users')
             .select('*')
-            .eq('id', orderOnly.kitchen_id)
+            .eq('id', data.kitchen_id)
             .single();
-          
-          data = { 
-            ...orderOnly, 
-            kitchens: profileKitchen ? {
-              ...profileKitchen,
-              kitchen_name: profileKitchen.kitchen_name || profileKitchen.kitchenName
-            } : null 
+        
+        if (kitchenData) {
+          data.kitchens = {
+            ...kitchenData,
+            kitchen_name: kitchenData.kitchen_name || kitchenData.full_name || 'Kitchen'
           };
         }
       }

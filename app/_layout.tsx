@@ -143,8 +143,6 @@ function RootLayoutContent() {
         <Stack.Screen name="(modals)/logout" options={{ presentation: 'transparentModal', animation: 'fade', headerShown: false }} />
         <Stack.Screen name="order/success" options={{ headerShown: false }} />
         <Stack.Screen name="order/[id]" />
-        <Stack.Screen name="admin/dashboard" options={{ presentation: 'modal', headerShown: false }} />
-        <Stack.Screen name="admin/zones" options={{ presentation: 'modal', headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );

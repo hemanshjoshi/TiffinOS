@@ -15,53 +15,78 @@ export default function SearchResultsScreen() {
   React.useEffect(() => {
     const fetchResults = async () => {
       setLoading(true);
-      // Search in menu items and profiles (kitchens)
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('is_open', true)
-        .ilike('kitchen_name', `%${q}%`);
       
-      if (!error && data) {
-        setResults(data);
+      // Use the new global search RPC
+      try {
+        const { data, error } = await supabase.rpc('search_global', { search_query: q });
+        
+        if (error) {
+          console.error('Search RPC Error:', error);
+          setResults([]);
+        } else if (data) {
+          // Combine kitchens and dishes
+          const combined = [
+            ...(data.kitchens || []),
+            ...(data.dishes || [])
+          ];
+          setResults(combined);
+        }
+      } catch (e) {
+        console.error('Search Exception:', e);
       }
+      
       setLoading(false);
     };
 
     fetchResults();
   }, [q]);
 
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-       style={styles.card}
-       onPress={() => router.push(`/kitchen/${item.id}`)}
-    >
-       <Image 
-          source={{ uri: item.image_url || item.profile_image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c' }} 
-          style={styles.image} 
-          resizeMode="cover" 
-        />
-       
-       <View style={styles.content}>
-          <View style={styles.row}>
-             <Text style={styles.name}>{item.kitchen_name || item.kitchenName}</Text>
-             <View style={styles.rating}>
-                <Text style={styles.ratingText}>{item.rating || '4.0'}</Text>
-                <Star size={10} color="#fff" fill="#fff" />
-             </View>
-          </View>
-          
-          <View style={styles.row}>
-             <Text style={styles.tags}>{item.chef_name || 'Chef'}</Text>
-             <Text style={styles.price}>₹150 for one</Text>
-          </View>
+  const renderItem = ({ item }: { item: any }) => {
+    const isDish = item.type === 'dish';
+    const link = isDish ? `/kitchen/${item.kitchen_id}` : `/kitchen/${item.id}`; // Both go to kitchen for now
 
-          <View style={styles.divider} />
-          
-          <Text style={styles.time}>25 min delivery</Text>
-       </View>
-    </TouchableOpacity>
-  );
+    return (
+      <TouchableOpacity 
+        style={styles.card}
+        onPress={() => router.push(link)}
+      >
+        <Image 
+            source={{ uri: item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c' }} 
+            style={styles.image} 
+            resizeMode="cover" 
+          />
+        
+        <View style={styles.content}>
+            <View style={styles.row}>
+              <Text style={styles.name}>{item.name}</Text>
+              {item.rating && (
+                <View style={styles.rating}>
+                  <Text style={styles.ratingText}>{item.rating}</Text>
+                  <Star size={10} color="#fff" fill="#fff" />
+                </View>
+              )}
+            </View>
+            
+            <View style={styles.row}>
+              {isDish ? (
+                 <Text style={styles.tags}>In {item.kitchen_name}</Text>
+              ) : (
+                 <Text style={styles.tags}>Kitchen</Text>
+              )}
+              {isDish ? (
+                <Text style={styles.price}>₹{item.price}</Text>
+              ) : (
+                <Text style={styles.price}>View Menu</Text>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+            
+            <Text style={styles.time}>{isDish ? 'Order Now' : '25 min delivery'}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <Screen backgroundColor={Colors.background} safeArea={true}>

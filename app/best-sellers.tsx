@@ -19,10 +19,10 @@ export default function BestSellersScreen() {
     setLoading(true);
     // Fetch top rated kitchens or specific best sellers
     const { data, error } = await supabase
-      .from('profiles')
+      .from('kitchens')
       .select('*')
-      .eq('is_open', true)
-      .order('rating', { ascending: false }); // Assuming rating determines best seller
+      .eq('is_active', true)
+      .order('rating', { ascending: false });
 
     if (data) {
       setKitchens(data);

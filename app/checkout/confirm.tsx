@@ -9,7 +9,7 @@ import { useAuth } from '@/services/authContext';
 import { useAddressStore } from '@/store/addressStore';
 
 export default function ConfirmOrderScreen() {
-  const { items, clearCart, getTotalPrice } = useCartStore();
+  const { items, clearCart, coupon } = useCartStore();
   const { user } = useAuth();
   const { selectedAddress } = useAddressStore();
   const [status, setStatus] = useState('Processing Payment...');
@@ -31,43 +31,31 @@ export default function ConfirmOrderScreen() {
         setStatus('Placing Order...');
         
         const kitchenId = items[0].kitchenId;
-        const totalPrice = getTotalPrice();
-        const finalAmount = totalPrice + 40 + Math.round(totalPrice * 0.05);
 
-        // 1. Create Order
-        const { data: order, error: orderError } = await supabase
-          .from('orders')
-          .insert({
-            user_id: user.id,
-            kitchen_id: kitchenId,
-            status: 'Pending',
-            total_amount: finalAmount,
-            delivery_address_id: selectedAddress?.id,
-            delivery_address_snapshot: selectedAddress, // Store full address in case it's deleted later
-            payment_method: 'UPI', // Mocked for now
-            payment_status: 'Paid'
-          })
-          .select()
-          .single();
+        // Construct payload for RPC
+        const payload = {
+          p_kitchen_id: kitchenId,
+          p_delivery_address_id: selectedAddress?.id,
+          p_items: items.map(item => ({
+            menu_item_id: item.menuItemId,
+            quantity: item.quantity,
+            variant_id: item.selectedVariant?.id || null, // Ensure explicit null if undefined
+            addon_ids: item.selectedAddons?.map(addon => addon.id) || []
+          })),
+          p_coupon_code: coupon?.code || null
+        };
 
-        if (orderError) throw orderError;
+        console.log('Calling create_order RPC with payload:', JSON.stringify(payload, null, 2));
 
-        // 2. Create Order Items
-        const orderItems = items.map(item => ({
-          order_id: order.id,
-          menu_item_id: item.menuItemId,
-          user_id: user.id,
-          quantity: item.quantity,
-          price_at_time: item.price,
-          selected_variant: item.selectedVariant,
-          selected_addons: item.selectedAddons
-        }));
+        // Call Secure RPC Function
+        const { data: order, error } = await supabase.rpc('create_order', payload);
 
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItems);
+        if (error) {
+          console.error('RPC Error:', error);
+          throw error;
+        }
 
-        if (itemsError) throw itemsError;
+        console.log('Order created successfully:', order);
 
         // 3. Success
         clearCart();

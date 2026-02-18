@@ -3,6 +3,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Colors } from '@/constants/Colors';
 import { Image } from 'expo-image';
 import { supabase } from '@/services/supabase';
+import { useCachedData } from '@/hooks/useCachedData';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Star, MapPin, Share2, Search, ChevronDown, Filter } from 'lucide-react-native';
 import { useCartStore } from '@/store/cartStore';
@@ -12,48 +13,55 @@ import { ConfirmationModal } from '@/components/ui/ConfirmationModal';
 
 export default function KitchenDetailsScreen() {
   const { id } = useLocalSearchParams();
-  const [kitchen, setKitchen] = useState<any>(null);
-  const [menuItems, setMenuItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isReplaceModalVisible, setReplaceModalVisible] = useState(false);
   const [pendingItem, setPendingItem] = useState<any>(null);
+
+  // 1. Fetch Kitchen Details with Caching
+  const { data: kitchenProfile, loading: kitchenLoading } = useCachedData(
+    `kitchen_profile_${id}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('kitchens')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    { enabled: !!id, ttl: 3600000, backgroundRefresh: true } // 1 hour TTL
+  );
+
+  // 2. Fetch Menu Items with Caching
+  const { data: fetchedMenuItems, loading: menuLoading } = useCachedData<any[]>(
+    `kitchen_menu_${id}`,
+    async () => {
+      const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('kitchen_id', id)
+        .eq('is_available', true);
+      if (error) throw error;
+      return data || [];
+    },
+    { enabled: !!id, ttl: 1800000, backgroundRefresh: true } // 30 min TTL
+  );
+
+  const loading = kitchenLoading || menuLoading;
+  
+  // Transform kitchen data for UI consistency
+  const kitchen = kitchenProfile ? {
+    ...kitchenProfile,
+    kitchen_name: kitchenProfile.kitchen_name,
+    profile_image_url: kitchenProfile.profile_image_url || kitchenProfile.image_url
+  } : null;
+
+  const menuItems = fetchedMenuItems || [];
 
   // Constants for styling - App Theme
   const PRIMARY_COLOR = Colors.primary;
   const SECONDARY_COLOR = Colors.secondary;
   const BG_COLOR = '#ffffff';
   const TEXT_COLOR = Colors.text;
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      // Fetch Kitchen - Use 'kitchens' table
-      const { data: profileData, error: profileError } = await supabase
-        .from('kitchens')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (profileData) {
-        setKitchen({
-          ...profileData,
-          kitchen_name: profileData.kitchen_name,
-          profile_image_url: profileData.profile_image_url || profileData.image_url
-        });
-      }
-
-      // Fetch Menu Items
-      const { data: menuData } = await supabase
-        .from('menu_items')
-        .select('*')
-        .eq('kitchen_id', id);
-      
-      if (menuData) setMenuItems(menuData);
-      setLoading(false);
-    };
-
-    fetchData();
-  }, [id]);
 
   const { items, addItem, removeItem, getTotalPrice, clearCart } = useCartStore();
   const cartItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
@@ -228,7 +236,7 @@ export default function KitchenDetailsScreen() {
            {loading ? (
               <Text style={{ padding: 20, textAlign: 'center', color: '#666' }}>Loading Menu...</Text>
            ) : menuItems.length > 0 ? (
-              menuItems.map((item, index) => (
+              menuItems.map((item: any, index: number) => (
                  <View key={item.id || index}>
                     {renderMenuItem({ item })}
                     <View style={styles.divider} />

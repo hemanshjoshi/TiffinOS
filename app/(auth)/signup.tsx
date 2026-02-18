@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Dimensions, StatusBar, Platform } from 'react-native';
 import { Screen } from '@/components/ui/Screen';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -19,9 +19,22 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const showAlert = (title: string, message: string, buttons?: any[]) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}: ${message}`);
+      if (buttons && buttons.length > 0) {
+          const lastBtn = buttons[buttons.length - 1];
+          if (lastBtn.onPress) lastBtn.onPress();
+      }
+    } else {
+      Alert.alert(title, message, buttons);
+    }
+  };
+
   const handleSignup = async () => {
+    console.log('Signup started');
     if (!email || !password || !name || !phone) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      showAlert('Error', 'Please fill in all required fields');
       return;
     }
 
@@ -41,16 +54,19 @@ export default function SignupScreen() {
     });
 
     if (signUpError) {
-      Alert.alert('Signup Failed', signUpError.message);
+      console.error('Signup error:', signUpError);
+      showAlert('Signup Failed', signUpError.message);
       setLoading(false);
       return;
     }
 
+    console.log('Signup successful, user:', user);
+
     if (user) {
-      // 2. Insert into our custom users/profiles table
+      // 2. Insert into our custom users table
       try {
         const { error: profileError } = await supabase
-          .from('profiles') // Assuming profiles table based on home.tsx usage
+          .from('users')
           .upsert({
             id: user.id,
             full_name: name,
@@ -69,7 +85,7 @@ export default function SignupScreen() {
         setLoading(false);
       }
       
-      Alert.alert(
+      showAlert(
           'Success', 
           'Account created successfully! Please verify your email.',
           [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
@@ -80,7 +96,7 @@ export default function SignupScreen() {
   };
 
   const handleSocialLogin = async (provider: 'google' | 'facebook') => {
-    Alert.alert('Social Login', `${provider} login not implemented yet`);
+    showAlert('Social Login', `${provider} login not implemented yet`);
   };
 
   return (
