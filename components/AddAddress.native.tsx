@@ -26,7 +26,7 @@ export default function AddAddressScreen() {
     street_area: '',
     city: 'Oakland',
     state: 'CA',
-    pincode: '',
+    pincode: '94601',
     user_id: authUser?.id
   });
 
@@ -98,26 +98,53 @@ export default function AddAddressScreen() {
 
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Name</Text>
+              <Text style={styles.inputLabel}>Label (HOME/WORK/OTHER)</Text>
               <TextInput 
                 style={styles.input}
                 value={formData.label}
-                onChangeText={t => setFormData({...formData, label: t as any})}
-                placeholder="e.g. My Home"
+                onChangeText={t => setFormData({...formData, label: t.toUpperCase() as any})}
+                placeholder="e.g. HOME"
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Address</Text>
+              <Text style={styles.inputLabel}>House / Flat No.</Text>
               <TextInput 
-                style={[styles.input, styles.textArea]}
-                value={`${formData.house_flat_no ? formData.house_flat_no + ', ' : ''}${formData.building_society ? formData.building_society + ', ' : ''}${formData.street_area ? formData.street_area : ''}`}
-                onChangeText={t => {
-                   // Simple parsing for the demo, in real app would have separate fields
-                   setFormData({...formData, street_area: t});
-                }}
-                multiline
-                placeholder="778 Locust View Drive Oaklanda, CA"
+                style={styles.input}
+                value={formData.house_flat_no}
+                onChangeText={t => setFormData({...formData, house_flat_no: t})}
+                placeholder="e.g. Flat 101"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Building / Society</Text>
+              <TextInput 
+                style={styles.input}
+                value={formData.building_society}
+                onChangeText={t => setFormData({...formData, building_society: t})}
+                placeholder="e.g. Green Apartments"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Street / Area</Text>
+              <TextInput 
+                style={styles.input}
+                value={formData.street_area}
+                onChangeText={t => setFormData({...formData, street_area: t})}
+                placeholder="e.g. Main Street"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Pincode</Text>
+              <TextInput 
+                style={styles.input}
+                value={formData.pincode}
+                onChangeText={t => setFormData({...formData, pincode: t})}
+                placeholder="e.g. 94601"
+                keyboardType="number-pad"
               />
             </View>
           </View>

@@ -34,8 +34,6 @@
       "expo-web-browser"
     ],
     "extra": {
-      "EXPO_PUBLIC_SUPABASE_URL": "https://nqrujwwogtvrlcxrqzlt.supabase.co",
-      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xcnVqd3dvZ3R2cmxjeHJxemx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyNzg2MDgsImV4cCI6MjA3ODg1NDYwOH0.hcPectl0SmKHwvF5xiwjbXrBcjjpv2QJWOqCAXu7pxQ",
       "router": {},
       "eas": {
         "projectId": "a018991e-486e-4cbc-a984-b213f18b3e78"

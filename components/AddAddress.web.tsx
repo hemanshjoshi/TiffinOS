@@ -129,33 +129,53 @@ export default function AddAddressScreen() {
   };
 
   const handleSave = async () => {
+    console.log("Handle Save started", formData);
     if (!formData.house_flat_no || !formData.street_area) {
         Alert.alert('Error', 'Please fill all required fields.');
         return;
     }
 
-    // Ensure user_id is set (in case it wasn't ready at mount)
-    const dataToSave = { ...formData, user_id: formData.user_id || authUser?.id };
-    
-    if (!dataToSave.user_id) {
-        Alert.alert('Error', 'User not authenticated. Please log in again.');
-        return;
-    }
-
     setLoading(true);
     try {
+        // Refresh session to ensure authUser is up to date
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = formData.user_id || session?.user?.id || authUser?.id;
+
+        console.log("Saving address for user:", userId);
+
+        if (!userId) {
+            Alert.alert('Error', 'User not authenticated. Please log in again.');
+            setLoading(false);
+            return;
+        }
+
+        const dataToSave = { 
+            ...formData, 
+            user_id: userId,
+            label: (formData.label || 'HOME').toUpperCase() as "HOME" | "WORK" | "OTHER"
+        };
+        
+        // Remove id if it's an insert to avoid issues
+        if (!isEdit) {
+            delete (dataToSave as any).id;
+        }
+
         let savedAddress;
         if (isEdit) {
+            console.log("Updating address:", id);
             savedAddress = await AddressService.updateAddress(id as string, dataToSave);
             if (selectedAddress?.id === id) {
                 setSelectedAddress(savedAddress);
             }
         } else {
+            console.log("Adding new address");
             savedAddress = await AddressService.addAddress(dataToSave as Omit<Address, 'id'>);
             setSelectedAddress(savedAddress);
         }
+        console.log("Save successful", savedAddress);
         router.back();
     } catch (e: any) {
+        console.error('Failed to save address:', e);
         Alert.alert('Error', e.message || 'Failed to save address');
     } finally {
         setLoading(false);

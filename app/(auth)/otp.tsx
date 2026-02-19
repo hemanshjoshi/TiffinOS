@@ -12,9 +12,10 @@ export default function OtpScreen() {
 
   const handleResend = async () => {
     setTimer(30);
+    const cleanPhone = phone?.toString().startsWith('+') ? phone : `+${phone}`;
     try {
         const { error } = await supabase.auth.signInWithOtp({
-            phone: `+${phone}`,
+            phone: cleanPhone as string,
         });
         if (error) {
             Alert.alert('Error', error.message);
@@ -39,8 +40,9 @@ export default function OtpScreen() {
       return;
     }
 
+    const cleanPhone = phone?.toString().startsWith('+') ? phone : `+${phone}`;
     const { error, data } = await supabase.auth.verifyOtp({
-      phone: `+${phone}`,
+      phone: cleanPhone as string,
       token: otp,
       type: 'sms',
     });

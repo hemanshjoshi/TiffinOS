@@ -1,17 +1,18 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal, ActivityIndicator, Alert } from 'react-native';
 import { useCartStore } from '@/store/cartStore';
 import { useAddressStore } from '@/store/addressStore';
 import { Colors } from '@/constants/Colors';
 import { router } from 'expo-router';
 import { ArrowLeft, MapPin, Ticket, ChevronRight, X } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/services/supabase';
 import { Image } from 'expo-image';
+import RazorpayCheckout from 'react-native-razorpay';
 
 export default function CartScreen() {
   const selectedAddress = useAddressStore((state) => state.selectedAddress);
-  const { items, removeItem, addItem, getTotalPrice, clearCart, applyCoupon, removeCoupon, coupon: appliedCoupon, getDiscountAmount } = useCartStore();
+  const { items, removeItem, addItem, clearCart, applyCoupon, removeCoupon, coupon: appliedCoupon } = useCartStore();
   const [tipAmount, setTipAmount] = useState(0);
   const [isCouponModalVisible, setCouponModalVisible] = useState(false);
   const [kitchen, setKitchen] = useState<any>(null);
@@ -19,9 +20,37 @@ export default function CartScreen() {
   const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
   const [manualCouponCode, setManualCouponCode] = useState('');
   const [couponError, setCouponError] = useState('');
+  const [billSummary, setBillSummary] = useState<any>(null);
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
 
-  // Dynamic Kitchen Details
   const kitchenId = items.length > 0 ? items[0].kitchenId : null;
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      if (items.length > 0 && kitchenId) {
+        setIsLoadingSummary(true);
+        const { data, error } = await supabase.rpc('get_cart_summary', {
+          p_items: items.map(item => ({
+            menu_item_id: item.menuItemId,
+            quantity: item.quantity,
+            variant_id: item.selectedVariant?.id || null,
+            addon_ids: item.selectedAddons?.map(addon => addon.id) || []
+          })),
+          p_coupon_code: appliedCoupon?.code || null,
+          p_kitchen_id: kitchenId
+        });
+
+        if (error) {
+            console.error('Error fetching summary:', error);
+        } else if (data) {
+            setBillSummary(data);
+        }
+        setIsLoadingSummary(false);
+      }
+    };
+
+    fetchSummary();
+  }, [items, appliedCoupon, kitchenId]);
 
   useEffect(() => {
     const fetchKitchen = async () => {
@@ -41,18 +70,18 @@ export default function CartScreen() {
     };
 
     const fetchCoupons = async () => {
-        // Fetch global coupons (kitchen_id is null) OR coupons for this kitchen
         const { data, error } = await supabase
             .from('coupons')
             .select('*')
-            .eq('is_active', true)
-            .gte('valid_until', new Date().toISOString());
+            .eq('is_active', true);
 
         if (error) {
             console.error("Error fetching coupons:", error);
         } else {
-            // Client side filtering for kitchen_id (since OR with null is tricky in simple query builder sometimes)
-            const validCoupons = data.filter(c => c.kitchen_id === null || c.kitchen_id === kitchenId);
+            const validCoupons = data.filter(c => 
+                (c.valid_until === null || new Date(c.valid_until) > new Date()) &&
+                (c.kitchen_id === null || c.kitchen_id === kitchenId)
+            );
             setAvailableCoupons(validCoupons);
         }
     };
@@ -60,7 +89,6 @@ export default function CartScreen() {
     const fetchCrossSellItems = async () => {
         if (items.length > 0 && kitchenId) {
             const cartItemIds = new Set(items.map(i => i.menuItemId));
-            // Fetch items ONLY from the current kitchen
             const { data, error } = await supabase
                 .from('menu_items')
                 .select('*')
@@ -70,7 +98,6 @@ export default function CartScreen() {
             if (error) {
                 console.error("Error fetching cross sell items:", error);
             } else {
-                // Filter out items already in cart
                 const filteredItems = data.filter(i => !cartItemIds.has(i.id)).slice(0, 5);
                 setCrossSellItems(filteredItems);
             }
@@ -80,88 +107,91 @@ export default function CartScreen() {
     fetchKitchen();
     fetchCoupons();
     fetchCrossSellItems();
-  }, [kitchenId, items]);
-  
-  const itemTotal = getTotalPrice();
-  const discountAmount = getDiscountAmount();
+  }, [kitchenId]);
 
-  const handleApplyManualCoupon = () => {
-      const code = manualCouponCode.trim().toUpperCase();
-      const coupon = availableCoupons.find(c => c.code === code);
-      if (coupon) {
-          if (itemTotal >= coupon.min_order_value) {
-              applyCoupon(coupon);
-              setCouponModalVisible(false);
-              setManualCouponCode('');
-              setCouponError('');
-          } else {
-              setCouponError(`Minimum order value is ₹${coupon.min_order_value}`);
-          }
-      } else {
-          setCouponError('Invalid coupon code');
-      }
-  };
-
-  // Delivery Logic: Free if > 169
-  const isFreeDelivery = itemTotal > 169;
-  const standardDeliveryFee = 37;
-  const finalDeliveryFee = isFreeDelivery ? 0 : standardDeliveryFee;
-
-  const platformFee = 12.50;
-  const gst = 12.25;
-  const grandTotal = itemTotal + finalDeliveryFee + platformFee + gst + tipAmount - discountAmount;
+  const grandTotal = useMemo(() => {
+    if (!billSummary) return 0;
+    return billSummary.grand_total + tipAmount;
+  }, [billSummary, tipAmount]);
 
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+  const handleApplyManualCoupon = () => {
+    const code = manualCouponCode.trim().toUpperCase();
+    const coupon = availableCoupons.find(c => c.code === code);
+    if (coupon) {
+        const itemTotal = billSummary?.item_total || 0;
+        if (itemTotal >= coupon.min_order_value) {
+            applyCoupon(coupon);
+            setCouponModalVisible(false);
+            setManualCouponCode('');
+            setCouponError('');
+        } else {
+            setCouponError(`Minimum order value is ₹${coupon.min_order_value}`);
+        }
+    } else {
+        setCouponError('Invalid coupon code');
+    }
+  };
+
   const handlePayment = async () => {
     if (!selectedAddress) {
-        alert('Please select a delivery address first.');
+        Alert.alert('Address Required', 'Please select a delivery address first.');
         return;
     }
 
     setIsProcessingPayment(true);
     
-    // Simulate payment processing delay
-    setTimeout(async () => {
-      try {
-        // Construct payload for RPC
-        const payload = {
-          p_kitchen_id: kitchenId,
-          p_delivery_address_id: selectedAddress?.id,
-          p_items: items.map(item => ({
-            menu_item_id: item.menuItemId,
-            quantity: item.quantity,
-            variant_id: item.selectedVariant?.id || null, 
-            addon_ids: item.selectedAddons?.map(addon => addon.id) || []
-          })),
-          p_coupon_code: appliedCoupon?.code || null
+    try {
+        const options = {
+            description: 'Order Payment for Maakhana',
+            image: 'https://maakhana.app/logo.png',
+            currency: 'INR',
+            key: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+            amount: Math.round(grandTotal * 100),
+            name: 'Maakhana App',
+            prefill: {
+                email: 'customer@example.com',
+                contact: '9999999999',
+                name: 'Maakhana User'
+            },
+            theme: { color: Colors.primary }
         };
 
-        console.log('Calling create_order RPC from Cart with payload:', JSON.stringify(payload, null, 2));
+        RazorpayCheckout.open(options).then(async (data: any) => {
+            const payload = {
+                p_kitchen_id: kitchenId,
+                p_delivery_address_id: selectedAddress?.id,
+                p_items: items.map(item => ({
+                    menu_item_id: item.menuItemId,
+                    quantity: item.quantity,
+                    variant_id: item.selectedVariant?.id || null, 
+                    addon_ids: item.selectedAddons?.map(addon => addon.id) || []
+                })),
+                p_coupon_code: appliedCoupon?.code || null
+            };
 
-        // Call Secure RPC Function
-        const { data: orderResponse, error } = await supabase.rpc('create_order', payload);
+            const { data: orderResponse, error } = await supabase.rpc('create_order', payload);
 
-        if (error) {
-          console.error('RPC Error:', error);
-          throw error;
-        }
+            if (error) throw error;
 
-        console.log('Order created successfully:', orderResponse);
+            router.replace({ pathname: '/order/success', params: { orderId: orderResponse.order_id } });
+            setTimeout(() => clearCart(), 500);
+        }).catch((error: any) => {
+            console.log('Payment failed:', error);
+            Alert.alert('Payment Failed', 'Payment failed or cancelled.');
+        }).finally(() => {
+            setIsProcessingPayment(false);
+        });
 
+    } catch (error: any) {
+        console.error('Payment Error:', error);
+        Alert.alert('Error', 'Failed to initiate payment.');
         setIsProcessingPayment(false);
-        router.replace({ pathname: '/order/success', params: { orderId: orderResponse.order_id } });
-        setTimeout(() => clearCart(), 500);
-      } catch (error: any) {
-        console.error('Payment/Order creation error:', error);
-        alert('Failed to place order: ' + (error.message || 'Unknown error'));
-        setIsProcessingPayment(false);
-      }
-    }, 2000);
+    }
   };
 
   const renderCartItem = (item: any) => {
-    // Construct customization string
     let customizationText = '';
     if (item.selectedVariant) {
         customizationText += item.selectedVariant.name;
@@ -182,9 +212,6 @@ export default function CartScreen() {
                     {customizationText ? (
                         <View style={styles.customizationRow}>
                             <Text style={styles.itemCustomization}>{customizationText}</Text>
-                            <TouchableOpacity>
-                                <Text style={styles.editButton}>Edit</Text>
-                            </TouchableOpacity>
                         </View>
                     ) : (
                         <View style={styles.customizationRow}>
@@ -225,18 +252,13 @@ export default function CartScreen() {
             <ArrowLeft color="#000" size={24} />
          </TouchableOpacity>
          <View>
-             <Text style={styles.headerTitle}>{kitchen ? kitchen.kitchenName : 'Your Cart'}</Text>
+             <Text style={styles.headerTitle}>{kitchen ? kitchen.kitchen_name || kitchen.kitchenName : 'Your Cart'}</Text>
              {kitchen && <Text style={styles.headerSubtitle}>{kitchen.address}</Text>}
          </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
-        {/* Savings Banner */}
-        <View style={styles.savingsBanner}>
-            <Text style={styles.savingsText}>🥳 You saved ₹37 with Gold</Text>
-        </View>
-
         {/* Items List */}
         <View style={styles.section}>
             {items.map(renderCartItem)}
@@ -257,7 +279,7 @@ export default function CartScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {crossSellItems.map((item) => (
                         <View key={item.id} style={styles.crossSellCard}>
-                            <Image source={{ uri: item.image }} style={styles.crossSellImage} />
+                            <Image source={{ uri: item.image_url || item.image }} style={styles.crossSellImage} />
                             <View style={styles.crossSellInfo}>
                                 <View style={styles.vegIconSmall}>
                                     <View style={styles.vegDotSmall} />
@@ -283,7 +305,7 @@ export default function CartScreen() {
                         {appliedCoupon ? (
                             <View>
                                 <Text style={styles.couponTextApplied}>Code {appliedCoupon.code} applied</Text>
-                                <Text style={styles.couponSavings}>You saved ₹{discountAmount}</Text>
+                                <Text style={styles.couponSavings}>You saved ₹{billSummary?.discount_amount || 0}</Text>
                             </View>
                         ) : (
                             <Text style={styles.couponText}>Apply Coupon</Text>
@@ -302,60 +324,66 @@ export default function CartScreen() {
 
         {/* Bill Details */}
         <View style={styles.section}>
-            <Text style={styles.billTitle}>Bill Summary</Text>
-            <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Item Total</Text>
-                <Text style={styles.billValue}>₹{itemTotal}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                <Text style={styles.billTitle}>Bill Summary</Text>
+                {isLoadingSummary && <ActivityIndicator size="small" color={Colors.primary} />}
             </View>
-            <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Restaurant packaging charges</Text>
-                <Text style={styles.billValue}>₹10</Text>
-            </View>
-            <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Delivery partner fee</Text>
-                <View style={{flexDirection: 'row'}}>
-                    {isFreeDelivery ? (
-                        <>
-                            <Text style={[styles.billValue, {textDecorationLine: 'line-through', marginRight: 4, color: '#999'}]}>₹{standardDeliveryFee}</Text>
-                            <Text style={[styles.billValue, {color: Colors.primary}]}>FREE</Text>
-                        </>
-                    ) : (
-                        <Text style={styles.billValue}>₹{standardDeliveryFee}</Text>
+            
+            {billSummary ? (
+                <>
+                    <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Item Total</Text>
+                        <Text style={styles.billValue}>₹{billSummary.item_total}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Restaurant packaging charges</Text>
+                        <Text style={styles.billValue}>₹{billSummary.packaging_charge}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Delivery partner fee</Text>
+                        <View style={{flexDirection: 'row'}}>
+                            {billSummary.delivery_fee === 0 ? (
+                                <Text style={[styles.billValue, {color: Colors.primary}]}>FREE</Text>
+                            ) : (
+                                <Text style={styles.billValue}>₹{billSummary.delivery_fee}</Text>
+                            )}
+                        </View>
+                    </View>
+                    <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>Platform fee</Text>
+                        <Text style={styles.billValue}>₹{billSummary.platform_fee}</Text>
+                    </View>
+                    <View style={styles.billRow}>
+                        <Text style={styles.billLabel}>GST (govt. taxes)</Text>
+                        <Text style={styles.billValue}>₹{billSummary.gst_amount}</Text>
+                    </View>
+                    {tipAmount > 0 && (
+                        <View style={styles.billRow}>
+                            <Text style={styles.billLabel}>Delivery Tip</Text>
+                            <Text style={styles.billValue}>₹{tipAmount}</Text>
+                        </View>
                     )}
-                </View>
-            </View>
-            <View style={styles.billRow}>
-                <Text style={styles.billLabel}>Platform fee</Text>
-                <Text style={styles.billValue}>₹{platformFee.toFixed(2)}</Text>
-            </View>
-            <View style={styles.billRow}>
-                <Text style={styles.billLabel}>GST (govt. taxes)</Text>
-                <Text style={styles.billValue}>₹{gst.toFixed(2)}</Text>
-            </View>
-            {tipAmount > 0 && (
-                <View style={styles.billRow}>
-                    <Text style={styles.billLabel}>Delivery Tip</Text>
-                    <Text style={styles.billValue}>₹{tipAmount}</Text>
-                </View>
+                    {billSummary.discount_amount > 0 && (
+                        <View style={styles.billRow}>
+                            <Text style={[styles.billLabel, {color: Colors.success}]}>Coupon Discount</Text>
+                            <Text style={[styles.billValue, {color: Colors.success}]}>-₹{billSummary.discount_amount}</Text>
+                        </View>
+                    )}
+                    <View style={styles.divider} />
+                    <View style={styles.billRow}>
+                        <Text style={styles.totalLabel}>To Pay</Text>
+                        <Text style={styles.totalValue}>₹{grandTotal.toFixed(2)}</Text>
+                    </View>
+                </>
+            ) : (
+                <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 20 }} />
             )}
-            {discountAmount > 0 && (
-                <View style={styles.billRow}>
-                    <Text style={[styles.billLabel, {color: Colors.success}]}>Coupon Discount</Text>
-                    <Text style={[styles.billValue, {color: Colors.success}]}>-₹{discountAmount.toFixed(2)}</Text>
-                </View>
-            )}
-            <View style={styles.divider} />
-            <View style={styles.billRow}>
-                <Text style={styles.totalLabel}>To Pay</Text>
-                <Text style={styles.totalValue}>₹{grandTotal.toFixed(2)}</Text>
-            </View>
         </View>
 
         {/* Tip Section */}
         <View style={styles.section}>
             <View style={styles.tipHeader}>
                 <Text style={styles.tipTitle}>Tip your delivery partner</Text>
-                <Image source={{ uri: 'https://cdn-icons-png.flaticon.com/512/4529/4529980.png' }} style={styles.tipIcon} />
             </View>
             <Text style={styles.tipSubtitle}>Your kindness means a lot! 100% of your tip will go directly to them.</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tipOptions}>
@@ -368,9 +396,6 @@ export default function CartScreen() {
                         <Text style={[styles.tipText, tipAmount === amount && styles.tipTextActive]}>₹{amount}</Text>
                     </TouchableOpacity>
                 ))}
-                <TouchableOpacity style={styles.tipChip}>
-                    <Text style={styles.tipText}>Other</Text>
-                </TouchableOpacity>
             </ScrollView>
         </View>
 
@@ -386,9 +411,9 @@ export default function CartScreen() {
       {/* Pay Button */}
       <View style={styles.footer}>
           <TouchableOpacity 
-            style={[styles.payButton, isProcessingPayment && { opacity: 0.8 }]} 
+            style={[styles.payButton, (isProcessingPayment || !billSummary) && { opacity: 0.8 }]} 
             onPress={handlePayment}
-            disabled={isProcessingPayment}
+            disabled={isProcessingPayment || !billSummary}
           >
              {isProcessingPayment ? (
                <View style={{ flex: 1, alignItems: 'center' }}>
@@ -445,6 +470,7 @@ export default function CartScreen() {
 
                 <ScrollView contentContainerStyle={styles.couponList}>
                     {availableCoupons.map((coupon: any) => {
+                        const itemTotal = billSummary?.item_total || 0;
                         const isApplicable = itemTotal >= coupon.min_order_value;
                         return (
                             <TouchableOpacity 
@@ -535,19 +561,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
-  savingsBanner: {
-    backgroundColor: '#EBF5FF',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  savingsText: {
-    color: '#2563EB',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
   section: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -598,11 +611,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginRight: 8,
-  },
-  editButton: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
   },
   itemPriceUnit: {
     fontSize: 14,
@@ -916,10 +924,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  tipIcon: {
-    width: 40,
-    height: 40,
-  },
   tipSubtitle: {
     fontSize: 12,
     color: '#666',
@@ -977,7 +981,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#eee',
   },
   payButton: {
-    backgroundColor: 'green', // Zomato green for payment
+    backgroundColor: 'green',
     borderRadius: 8,
     padding: 14,
     flexDirection: 'row',
